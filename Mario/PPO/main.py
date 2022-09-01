@@ -82,7 +82,7 @@ env = FrameStack(env, num_stack=4)
 N = 200
 batch_size = 5
 n_epochs = 4
-alpha = 0.001
+alpha = 0.00001
 print(env.action_space.n)
 print(env.observation_space.shape)
 agent = Agent(n_actions=env.action_space.n, batch_size=batch_size, alpha=alpha, 

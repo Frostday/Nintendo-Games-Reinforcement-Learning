@@ -68,7 +68,8 @@ class ActorNetwork(nn.Module):
             nn.BatchNorm2d(fc2_dims),
             nn.Flatten(),
             nn.Linear(20736, 512),
-            nn.Linear(512, n_actions),
+            nn.Linear(512, 256),
+            nn.Linear(256, n_actions),
             nn.Softmax(dim=-1)
         )
 
@@ -105,7 +106,8 @@ class CriticNetwork(nn.Module):
             nn.BatchNorm2d(fc2_dims),
             nn.Flatten(),
             nn.Linear(20736, 512),
-            nn.Linear(512, 1),
+            nn.Linear(512, 256),
+            nn.Linear(256, 1),
         )
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
