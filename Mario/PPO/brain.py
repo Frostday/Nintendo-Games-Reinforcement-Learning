@@ -58,7 +58,7 @@ class ActorNetwork(nn.Module):
     def __init__(self, n_actions, input_dims, alpha, fc1_dims=32, fc2_dims=64, chkpt_dir='Mario/PPO/models/'):
         super(ActorNetwork, self).__init__()
 
-        self.checkpoint_file = os.path.join(chkpt_dir, 'actor')
+        self.checkpoint_file = os.path.join(chkpt_dir, 'actor.pt')
         self.actor = nn.Sequential(
             nn.Conv2d(input_dims[0], fc1_dims, 5, stride=2),
             nn.ReLU(),
@@ -96,7 +96,7 @@ class CriticNetwork(nn.Module):
     def __init__(self, input_dims, alpha, fc1_dims=32, fc2_dims=64, chkpt_dir='Mario/PPO/models/'):
         super(CriticNetwork, self).__init__()
 
-        self.checkpoint_file = os.path.join(chkpt_dir, 'critic')
+        self.checkpoint_file = os.path.join(chkpt_dir, 'critic.pt')
         self.critic = nn.Sequential(
             nn.Conv2d(input_dims[0], fc1_dims, 5, stride=2),
             nn.ReLU(),
