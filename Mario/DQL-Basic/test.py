@@ -3,7 +3,7 @@ from brain import DeepQNetwork
 import torch as T
 
 env = gym.make('LunarLander-v2')
-DQN = DeepQNetwork(lr=0.001, n_actions=4, input_dims=[8], fc1_dims=256, fc2_dims=256)
+DQN = DeepQNetwork(lr=0.001, n_actions=4, input_dims=[8], conv1_channels=256, conv2_channels=256)
 DQN.load_state_dict(T.load('DQL-Basic/model.pt'))
 
 score = 0

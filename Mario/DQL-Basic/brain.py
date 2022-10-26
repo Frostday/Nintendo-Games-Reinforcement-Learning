@@ -1,3 +1,4 @@
+import os
 import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,16 +7,23 @@ import numpy as np
 
 
 class DeepQNetwork(nn.Module):
-    def __init__(self, lr, input_dims, fc1_dims, fc2_dims, n_actions):
+    def __init__(self, lr, input_dims, conv1_channels, conv2_channels, n_actions, checkpoint_dir='Mario/DQL-Basic'):
         super(DeepQNetwork, self).__init__()
-        self.input_dims = input_dims
-        self.fc1_dims = fc1_dims
-        self.fc2_dims = fc2_dims
-        self.n_actions = n_actions
 
-        self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
-        self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
-        self.fc3 = nn.Linear(self.fc2_dims, self.n_actions)
+        self.checkpoint_file = os.path.join(checkpoint_dir, 'model.pt')
+        self.network = nn.Sequential(
+            nn.Conv2d(input_dims[0], conv1_channels, 5, stride=2),
+            nn.ReLU(inplace=False),
+            # nn.BatchNorm2d(conv1_channels),
+            nn.Conv2d(conv1_channels, conv2_channels, 5, stride=2),
+            nn.ReLU(inplace=False),
+            # nn.BatchNorm2d(conv2_channels),
+            nn.Flatten(),
+            nn.Linear(20736, 512),
+            nn.Linear(512, 256),
+            nn.Linear(256, n_actions),
+            nn.Softmax(dim=-1)
+        )
 
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
         self.loss = nn.MSELoss()
@@ -23,10 +31,7 @@ class DeepQNetwork(nn.Module):
         self.to(device=self.device)
 
     def forward(self, state):
-        x = F.relu(self.fc1(state))
-        x = F.relu(self.fc2(x))
-        actions = self.fc3(x)
-
+        actions = self.network(state)
         return actions
 
 
@@ -48,7 +53,7 @@ class Agent():
         # to keep track of the first available memory
 
         self.Q_eval = DeepQNetwork(self.lr, n_actions=n_actions, input_dims=input_dims,
-                                   fc1_dims=256, fc2_dims=256)
+                                   conv1_channels=32, conv2_channels=64)
 
         # memory - current state, new state, reward, action taken
         self.state_memory = np.zeros(
@@ -105,10 +110,10 @@ class Agent():
         # Forward DQN for current and the next state - output is q values of all actions in that state
         q_eval = self.Q_eval.forward(state_batch)[batch_index, action_batch]
         # indexing is done because we only want the q value for action taken
-
         q_next = self.Q_eval.forward(new_state_batch)
         # make q value of next action nothing(0) if new state was a terminal state
-        q_next[terminal_batch] = 0.0
+        q_next[terminal_batch] = q_next[terminal_batch].clone()
+        print('eval')
 
         # Qtarget = reward (for action taken in current state) + gamma*(q-value_for_best_action)
         # We get index 0 as the max function returns a tuple (value, index)
@@ -120,6 +125,7 @@ class Agent():
 
         loss = self.Q_eval.loss(q_target, q_eval).to(self.Q_eval.device)
         loss.backward()
+        print('next')
         self.Q_eval.optimizer.step()
 
         if self.epsilon > self.eps_min:

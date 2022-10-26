@@ -9,7 +9,6 @@ from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
 from gym.wrappers import FrameStack
 
 env = gym_super_mario_bros.make('SuperMarioBros-v0')
-# env = JoypadSpace(env, SIMPLE_MOVEMENT)
 env = JoypadSpace(env, [["right"], ["right", "A"]])
 env = SkipFrame(env, skip=4)
 env = GrayScaleObservation(env)
@@ -17,7 +16,7 @@ env = ResizeObservation(env, shape=84)
 env = FrameStack(env, num_stack=4)
 
 N = 200
-batch_size = 5
+batch_size = 64
 n_epochs = 4
 alpha = 0.00001
 
@@ -25,7 +24,7 @@ agent = Agent(n_actions=env.action_space.n, batch_size=batch_size, alpha=alpha,
                 n_epochs=n_epochs, input_dims=env.observation_space.shape)
 n_games = 300
 
-filename = 'mario.png'
+filename = 'ppo_average_scores.png'
 figure_file = os.path.join('Mario\PPO', filename)
 
 best_score = env.reward_range[0]
