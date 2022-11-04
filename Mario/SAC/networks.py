@@ -9,29 +9,31 @@ import numpy as np
 
 class CriticNetwork(nn.Module):
     # evaluates the value of a state and action pair
-    def __init__(self, beta, input_dims, n_actions, fc1_dims=256, fc2_dims=256,
-                 name='critic', chkpt_dir='CartPole\SAC\models'):
+    def __init__(self, beta, input_dims, n_actions, fc1_dims=32, fc2_dims=64,
+                 name='critic', chkpt_dir='Mario/SAC/models'):
         super(CriticNetwork, self).__init__()
-        self.input_dims = input_dims
-        self.fc1_dims = fc1_dims
-        self.fc2_dims = fc2_dims
-        self.n_actions = n_actions
+        self.critic = nn.Sequential(
+            nn.Conv2d(input_dims[0], fc1_dims, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(fc1_dims),
+            nn.Conv2d(fc1_dims, fc2_dims, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(fc2_dims),
+            nn.Flatten(),
+            nn.Linear(20736, 512),
+            nn.Linear(512, 256),
+            nn.Linear(256, 1),
+        )
         self.name = name
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_sac')
-
-        self.fc1 = nn.Linear(self.input_dims[0]+n_actions, self.fc1_dims)
-        self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
-        self.q = nn.Linear(self.fc2_dims, 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
     def forward(self, state, action):
-        action_value = F.relu(self.fc1(T.cat([state, action], dim=1)))
-        action_value = F.relu(self.fc2(action_value))
-        q = self.q(action_value)
+        q = self.critic(state)
         return q
 
     def save_checkpoint(self):
@@ -43,28 +45,31 @@ class CriticNetwork(nn.Module):
 
 class ValueNetwork(nn.Module):
     # estimates the value of a particular state, doesn't care about the action took or are taking
-    def __init__(self, beta, input_dims, fc1_dims=256, fc2_dims=256,
-                 name='value', chkpt_dir='CartPole\SAC\models'):
+    def __init__(self, beta, input_dims, n_actions, fc1_dims=32, fc2_dims=64,
+                 name='value', chkpt_dir='Mario/SAC/models'):
         super(ValueNetwork, self).__init__()
-        self.input_dims = input_dims
-        self.fc1_dims = fc1_dims
-        self.fc2_dims = fc2_dims
+        self.critic = nn.Sequential(
+            nn.Conv2d(input_dims[0], fc1_dims, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(fc1_dims),
+            nn.Conv2d(fc1_dims, fc2_dims, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(fc2_dims),
+            nn.Flatten(),
+            nn.Linear(20736, 512),
+            nn.Linear(512, 256),
+            nn.Linear(256, 1),
+        )
         self.name = name
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_sac')
-
-        self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
-        self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
-        self.v = nn.Linear(self.fc2_dims, 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
     def forward(self, state):
-        state_value = F.relu(self.fc1(state))
-        state_value = F.relu(self.fc2(state_value))
-        v = self.v(state_value)
+        v = self.critic(state)
         return v
 
     def save_checkpoint(self):
@@ -76,25 +81,30 @@ class ValueNetwork(nn.Module):
 
 class ActorNetwork(nn.Module):
     # returns a probability distribution
-    def __init__(self, alpha, input_dims, max_action, fc1_dims=256,
-                 fc2_dims=256, n_actions=2, name='actor', chkpt_dir='CartPole\SAC\models'):
+    def __init__(self, alpha, input_dims, fc1_dims=32,
+                 fc2_dims=64, n_actions=2, name='actor', chkpt_dir='Mario/SAC/models'):
         # max_action will be multiplied to the probability distribution(b/w -1 and 1) to get the real range
         super(ActorNetwork, self).__init__()
-        self.input_dims = input_dims
-        self.fc1_dims = fc1_dims
-        self.fc2_dims = fc2_dims
+        self.actor = nn.Sequential(
+            nn.Conv2d(input_dims[0], fc1_dims, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(fc1_dims),
+            nn.Conv2d(fc1_dims, fc2_dims, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(fc2_dims),
+            nn.Flatten(),
+            nn.Linear(20736, 512),
+            nn.Linear(512, 256)
+        )
         self.n_actions = n_actions
         self.name = name
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_sac')
-        self.max_action = max_action
         self.reparam_noise = 1e-6
 
-        self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
-        self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
-        self.mu = nn.Linear(self.fc2_dims, self.n_actions)
+        self.mu = nn.Linear(256, self.n_actions)
         # mean of probability distribution
-        self.sigma = nn.Linear(self.fc2_dims, self.n_actions)
+        self.sigma = nn.Linear(256, self.n_actions)
         # standard deviation of probability distribution
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
@@ -102,8 +112,7 @@ class ActorNetwork(nn.Module):
         self.to(self.device)
 
     def forward(self, state):
-        prob = F.relu(self.fc1(state))
-        prob = F.relu(self.fc2(prob))
+        prob = self.actor(state)
 
         mu = self.mu(prob)
         sigma = self.sigma(prob)
@@ -126,7 +135,7 @@ class ActorNetwork(nn.Module):
             actions = probabilities.sample()
         # print(actions)
 
-        action = T.tanh(actions) * T.tensor(self.max_action).to(self.device)
+        action = T.tanh(actions)
 
         log_probs = probabilities.log_prob(actions)
         # log of probabilities for loss function

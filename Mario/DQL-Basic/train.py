@@ -12,7 +12,7 @@ from gym.wrappers import FrameStack
 
 # os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-env = gym_super_mario_bros.make('SuperMarioBros-v3')
+env = gym_super_mario_bros.make('SuperMarioBros-v0')
 env = JoypadSpace(env, [["right"], ["right", "A"]])
 env = SkipFrame(env, skip=4)
 env = GrayScaleObservation(env)

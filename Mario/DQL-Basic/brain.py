@@ -67,8 +67,8 @@ class Agent():
 
     def store_transition(self, state, action, reward, state_, done):
         index = self.mem_cntr % self.mem_size
-        self.state_memory[index] = state
-        self.new_state_memory[index] = state_
+        self.state_memory[index] = state.__array__()
+        self.new_state_memory[index] = state_.__array__()
         self.reward_memory[index] = reward
         self.action_memory[index] = action
         self.terminal_memory[index] = done
@@ -77,7 +77,9 @@ class Agent():
 
     def choose_action(self, observation):
         if np.random.random() > self.epsilon:
-            state = T.tensor([observation]).to(self.Q_eval.device)
+            # print(type(observation), type(observation[0]))
+            # state = T.tensor([observation]).to(self.Q_eval.device)
+            state = T.tensor(observation.__array__(), dtype=T.float).unsqueeze(0).to(self.Q_eval.device)
             actions = self.Q_eval.forward(state)
             action = T.argmax(actions).item()
         else:
@@ -112,8 +114,9 @@ class Agent():
         # indexing is done because we only want the q value for action taken
         q_next = self.Q_eval.forward(new_state_batch)
         # make q value of next action nothing(0) if new state was a terminal state
-        q_next[terminal_batch] = q_next[terminal_batch].clone()
-        print('eval')
+        q_next = q_next.clone()
+        q_next[terminal_batch] = 0.0
+        # print('eval')
 
         # Qtarget = reward (for action taken in current state) + gamma*(q-value_for_best_action)
         # We get index 0 as the max function returns a tuple (value, index)
@@ -125,7 +128,7 @@ class Agent():
 
         loss = self.Q_eval.loss(q_target, q_eval).to(self.Q_eval.device)
         loss.backward()
-        print('next')
+        # print('next')
         self.Q_eval.optimizer.step()
 
         if self.epsilon > self.eps_min:

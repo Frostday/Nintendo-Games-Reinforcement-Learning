@@ -1,30 +1,36 @@
-import pybullet_envs
-import gym
 import numpy as np
-from brain import Agent
-from utils import plot_learning_curve
-from gym import wrappers
 import os
+from brain import Agent
+from utils import *
 
-# Continous action space - Where you have to perform a continous action instead of a discrete action
-# Example of a continous action is steering a wheel, pressing a gas pedal where you also have to decide:
-# how much to rotate the wheel and how much to press the gas pedal
-# Actor Critic is used for continous action spaces
+from nes_py.wrappers import JoypadSpace
+import gym_super_mario_bros
+from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
+from gym.wrappers import FrameStack
+
+env = gym_super_mario_bros.make('SuperMarioBros-v0')
+env = JoypadSpace(env, [["right"], ["right", "A"]])
+env = SkipFrame(env, skip=4)
+env = GrayScaleObservation(env)
+env = ResizeObservation(env, shape=84)
+env = FrameStack(env, num_stack=4)
+
+batch_size = 64
+alpha = 0.00001
+
+agent = Agent(n_actions=env.action_space.n, batch_size=batch_size, alpha=alpha,
+                input_dims=env.observation_space.shape)
+n_games = 300
+filename = 'sac_average_scores.png'
+figure_file = os.path.join('Mario\SAC', filename)
 
 if __name__ == '__main__':
-    os.environ['KMP_DUPLICATE_LIB_OK']='True'
-    env = gym.make('InvertedPendulumBulletEnv-v0')
-    agent = Agent(input_dims=env.observation_space.shape, env=env,
-            n_actions=env.action_space.shape[0])
-    n_games = 250
-    filename = 'inverted_pendulum.png'
-    figure_file = os.path.join('CartPole\SAC', filename)
     best_score = env.reward_range[0]
     score_history = []
 
     # make true to test the model and false for training
-    load_checkpoint = True
-    if load_checkpoint:
+    testing_mode = False
+    if testing_mode:
         agent.load_models()
         env.render(mode='human')
 
@@ -35,9 +41,10 @@ if __name__ == '__main__':
         while not done:
             action = agent.choose_action(observation)
             observation_, reward, done, info = env.step(action)
+            env.render()
             score += reward
             agent.remember(observation, action, reward, observation_, done)
-            if not load_checkpoint:
+            if not testing_mode:
                 agent.learn()
             observation = observation_
         score_history.append(score)
@@ -45,11 +52,11 @@ if __name__ == '__main__':
 
         if avg_score > best_score:
             best_score = avg_score
-            if not load_checkpoint:
+            if not testing_mode:
                 agent.save_models()
 
         print(f'episode {i+1}: ' 'score=%.2f' % score, 'average_score=%.2f' % avg_score)
 
-    if not load_checkpoint:
+    if not testing_mode:
         x = [i+1 for i in range(n_games)]
         plot_learning_curve(x, score_history, figure_file)

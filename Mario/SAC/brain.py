@@ -7,9 +7,8 @@ from networks import ActorNetwork, CriticNetwork, ValueNetwork
 
 
 class Agent():
-    def __init__(self, alpha=0.0003, beta=0.0003, input_dims=[8],
-                 env=None, gamma=0.99, n_actions=2, max_size=1000000, tau=0.005,
-                 layer1_size=256, layer2_size=256, batch_size=256, reward_scale=2):
+    def __init__(self, n_actions, input_dims, alpha=0.0003, beta=0.0003,
+                 gamma=0.99, max_size=10000, tau=0.005, batch_size=256, reward_scale=2):
         # reward scale accounts for entropy in the framework
         # rewards in critic loss are scaled by a factor of 2 here
         # tau is the factor by which we will modulate the parameters of our target value network
@@ -21,23 +20,25 @@ class Agent():
         self.n_actions = n_actions
 
         self.actor = ActorNetwork(alpha, input_dims, n_actions=n_actions,
-                                  name='actor', max_action=env.action_space.high)
+                                  name='actor')
         # we use 2 critic networks and we will use the lower evaluation for the state and action pair for the loss calculation
         self.critic_1 = CriticNetwork(beta, input_dims, n_actions=n_actions,
                                       name='critic_1')
         self.critic_2 = CriticNetwork(beta, input_dims, n_actions=n_actions,
                                       name='critic_2')
-        self.value = ValueNetwork(beta, input_dims, name='value')
-        self.target_value = ValueNetwork(beta, input_dims, name='target_value')
+        self.value = ValueNetwork(beta, input_dims, n_actions=n_actions, name='value')
+        self.target_value = ValueNetwork(beta, input_dims, n_actions=n_actions, name='target_value')
 
         self.scale = reward_scale
         self.update_network_parameters(tau=1)
 
     def choose_action(self, observation):
-        state = T.tensor([observation], dtype=T.float).to(self.actor.device)
+        state = T.tensor(observation.__array__(), dtype=T.float).unsqueeze(0).to(self.actor.device)
         actions, _ = self.actor.sample_normal(state, reparameterize=False)
+        actions = actions.cpu().detach().numpy()[0]
+        action = np.argmax(actions, axis=0)
 
-        return actions.cpu().detach().numpy()[0]
+        return action
 
     def remember(self, state, action, reward, new_state, done):
         self.memory.store_transition(state, action, reward, new_state, done)
@@ -47,15 +48,18 @@ class Agent():
             # because at the beginning, target value network should be exact copy of value network
             tau = self.tau
 
-        target_value_params = self.target_value.named_parameters()
-        value_params = self.value.named_parameters()
+        target_value_params = self.target_value.state_dict()
+        value_params = self.value.state_dict()
 
         target_value_state_dict = dict(target_value_params)
         value_state_dict = dict(value_params)
 
+        # print(target_value_state_dict.keys(), self.target_value.state_dict().keys())
+        # print(value_state_dict.keys())
         for name in value_state_dict:
-            value_state_dict[name] = tau*value_state_dict[name].clone() + \
-                (1-tau)*target_value_state_dict[name].clone()
+            if name in dict(self.value.named_parameters()).keys():
+                value_state_dict[name] = tau*value_state_dict[name].clone() + \
+                    (1-tau)*target_value_state_dict[name].clone()
 
         self.target_value.load_state_dict(value_state_dict)
 
