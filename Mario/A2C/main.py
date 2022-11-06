@@ -1,16 +1,19 @@
 import sys
 import torch
 import gym
-import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import pandas as pd
-import os
+import numpy as np
+from utils import *
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+from nes_py.wrappers import JoypadSpace
+import gym_super_mario_bros
+from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
+from gym.wrappers import FrameStack
 
 # hyperparameters
 hidden_size = 256
@@ -18,54 +21,74 @@ learning_rate = 3e-4
 
 # Constants
 GAMMA = 0.99
-num_steps = 300
-max_episodes = 3000
-
+n_games = 300
 
 class ActorCritic(nn.Module):
-    def __init__(self, num_inputs, num_actions, hidden_size, learning_rate=3e-4):
+    def __init__(self, input_dims, n_actions):
         super(ActorCritic, self).__init__()
 
-        self.num_actions = num_actions
-        self.critic_linear1 = nn.Linear(num_inputs, hidden_size)
-        self.critic_linear2 = nn.Linear(hidden_size, 1)
+        self.actor = nn.Sequential(
+            nn.Conv2d(input_dims[0], 32, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 64, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+            nn.Flatten(),
+            nn.Linear(20736, 512),
+            nn.Linear(512, 256),
+            nn.Linear(256, n_actions),
+            nn.Softmax(dim=-1)
+        )
 
-        self.actor_linear1 = nn.Linear(num_inputs, hidden_size)
-        self.actor_linear2 = nn.Linear(hidden_size, num_actions)
+        self.critic = nn.Sequential(
+            nn.Conv2d(input_dims[0], 32, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 64, 5, stride=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+            nn.Flatten(),
+            nn.Linear(20736, 512),
+            nn.Linear(512, 256),
+            nn.Linear(256, 1),
+        )
+
 
     def forward(self, state):
-        state = Variable(torch.from_numpy(state).float().unsqueeze(0))
-        value = F.relu(self.critic_linear1(state))
-        value = self.critic_linear2(value)
+        value = self.critic(state)
 
-        policy_dist = F.relu(self.actor_linear1(state))
-        policy_dist = F.softmax(self.actor_linear2(policy_dist), dim=1)
+        policy_dist = self.actor(state)
 
         return value, policy_dist
 
 
 def a2c(env):
-    num_inputs = env.observation_space.shape[0]
+    num_inputs = env.observation_space.shape
     num_outputs = env.action_space.n
 
-    actor_critic = ActorCritic(num_inputs, num_outputs, hidden_size)
+    actor_critic = ActorCritic(num_inputs, num_outputs)
     ac_optimizer = optim.Adam(actor_critic.parameters(), lr=learning_rate)
 
     all_lengths = []
     average_lengths = []
     all_rewards = []
     entropy_term = 0
+    score_history = []
 
-    for episode in range(max_episodes):
+    for episode in range(n_games):
         log_probs = []
         values = []
         rewards = []
+        done = False
+        score = 0
 
         state = env.reset()
-        for steps in range(num_steps):
-            value, policy_dist = actor_critic.forward(state)
-            print(value, policy_dist)
-            print(value.shape, policy_dist.shape)
+        while not done:
+            state_tensor = T.tensor(state.__array__(), dtype=T.float).unsqueeze(0)
+            value, policy_dist = actor_critic.forward(state_tensor)
+            # print(value, policy_dist)
+            # print(value.shape, policy_dist.shape)
             value = value.detach().numpy()[0, 0]
             dist = policy_dist.detach().numpy()
 
@@ -73,6 +96,10 @@ def a2c(env):
             log_prob = torch.log(policy_dist.squeeze(0)[action])
             entropy = -np.sum(np.mean(dist) * np.log(dist))
             new_state, reward, done, _ = env.step(action)
+            score += reward
+
+            if episode % 50 == 0:
+                env.render()
 
             rewards.append(reward)
             values.append(value)
@@ -80,16 +107,15 @@ def a2c(env):
             entropy_term += entropy
             state = new_state
 
-            if done or steps == num_steps-1:
-                Qval, _ = actor_critic.forward(new_state)
+            if done:
+                new_state_tensor = T.tensor(new_state.__array__(), dtype=T.float).unsqueeze(0)
+                Qval, _ = actor_critic.forward(new_state_tensor)
                 Qval = Qval.detach().numpy()[0, 0]
                 all_rewards.append(np.sum(rewards))
-                all_lengths.append(steps)
-                average_lengths.append(np.mean(all_lengths[-10:]))
-                if episode % 10 == 0:
-                    sys.stdout.write("episode: {}, reward: {}, total length: {}, average length: {} \n".format(
-                        episode, np.sum(rewards), steps, average_lengths[-1]))
+                sys.stdout.write("episode: {}, reward: {} \n".format(episode, np.sum(rewards)))
                 break
+
+        score_history.append(score)
 
         # compute Q values
         Qvals = np.zeros_like(values)
@@ -111,23 +137,15 @@ def a2c(env):
         ac_loss.backward()
         ac_optimizer.step()
 
-    # Plot results
-    smoothed_rewards = pd.Series.rolling(pd.Series(all_rewards), 10).mean()
-    smoothed_rewards = [elem for elem in smoothed_rewards]
-    plt.plot(all_rewards)
-    plt.plot(smoothed_rewards)
-    plt.plot()
-    plt.xlabel('Episode')
-    plt.ylabel('Reward')
-    plt.show()
-
-    plt.plot(all_lengths)
-    plt.plot(average_lengths)
-    plt.xlabel('Episode')
-    plt.ylabel('Episode length')
-    plt.show()
+    x = [i + 1 for i in range(len(score_history))]
+    plot_learning_curve(x, score_history, "Mario/A2C/a2c_average_scores.png")
 
 
 if __name__ == "__main__":
-    env = gym.make("CartPole-v0")
+    env = gym_super_mario_bros.make('SuperMarioBros-v0')
+    env = JoypadSpace(env, [["right"], ["right", "A"]])
+    env = SkipFrame(env, skip=4)
+    env = GrayScaleObservation(env)
+    env = ResizeObservation(env, shape=84)
+    env = FrameStack(env, num_stack=4)
     a2c(env)

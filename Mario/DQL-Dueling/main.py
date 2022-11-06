@@ -22,7 +22,7 @@ n_games = 300
 testing_mode = False
 
 agent = Agent(gamma=0.99, epsilon=1.0, alpha=lr, input_dims=env.observation_space.shape, 
-                n_actions=env.action_space.n, mem_size=100000, eps_min=0.01, 
+                n_actions=env.action_space.n, mem_size=10000, eps_min=0.01, 
                 batch_size=batchsize, eps_dec=1e-3, replace=100)
 
 if testing_mode:
@@ -30,7 +30,6 @@ if testing_mode:
     
 filename = 'Mario/DQL-Dueling/ddql_average_scores.png'
 scores, eps_history = [], []
-n_games = 4
 best_score = env.reward_range[0]
 
 iters = 0
@@ -41,7 +40,7 @@ for i in range(n_games):
     while not done:
         action = agent.choose_action(observation)
         observation_, reward, done, info = env.step(action)
-        if i % 50 == 0:
+        if i % 50 == 49:
             env.render()
         score += reward
         agent.store_transition(observation, action, reward, observation_, done)

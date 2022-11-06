@@ -25,7 +25,7 @@ agent = Agent(n_actions=env.action_space.n, batch_size=batch_size, alpha=alpha,
 n_games = 300
 
 filename = 'ppo_average_scores.png'
-figure_file = os.path.join('Mario\PPO', filename)
+figure_file = os.path.join('Mario/PPO', filename)
 
 best_score = env.reward_range[0]
 score_history = []
