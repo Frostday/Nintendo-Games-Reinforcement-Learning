@@ -20,9 +20,9 @@ alpha = 0.00001
 
 agent = Agent(n_actions=env.action_space.n, batch_size=batch_size, alpha=alpha,
                 input_dims=env.observation_space.shape)
-n_games = 300
+n_games = 2
 filename = 'sac_average_scores.png'
-figure_file = os.path.join('Mario\SAC', filename)
+figure_file = os.path.join('Mario/SAC', filename)
 
 if __name__ == '__main__':
     best_score = env.reward_range[0]
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     if testing_mode:
         agent.load_models()
         env.render(mode='human')
-
+    iters = 0
     for i in range(n_games):
         observation = env.reset()
         done = False
@@ -41,15 +41,17 @@ if __name__ == '__main__':
         while not done:
             action = agent.choose_action(observation)
             observation_, reward, done, info = env.step(action)
-            env.render()
+            if i % 50 == 0:
+                env.render()
             score += reward
             agent.remember(observation, action, reward, observation_, done)
-            if not testing_mode:
+            if not testing_mode and iters % 20 == 0:
                 agent.learn()
+            iters = (iters + 1) % 20
             observation = observation_
+        
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
-
         if avg_score > best_score:
             best_score = avg_score
             if not testing_mode:

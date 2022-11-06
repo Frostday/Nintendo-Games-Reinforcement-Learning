@@ -20,10 +20,10 @@ class ReplayBuffer(object):
 
     def store_transition(self, state, action, reward, state_, done):
         index = self.mem_cntr % self.mem_size
-        self.state_memory[index] = state
+        self.state_memory[index] = state.__array__()
+        self.new_state_memory[index] = state_.__array__()
         self.action_memory[index] = action
         self.reward_memory[index] = reward
-        self.new_state_memory[index] = state_
         self.terminal_memory[index] = done
 
         self.mem_cntr += 1
@@ -46,12 +46,23 @@ class DuelingLinearDeepQNetwork(nn.Module):
     # instead of just outputting a q value
     # in dueling deep q network we output a value and an advantage vector
     # value gives us the value of each state and advantage gives us the state-dependent action advantages
-    def __init__(self, alpha, n_actions, name, input_dims, chkpt_dir='LunarLander/DQL-Dueling/models'):
+    def __init__(self, alpha, n_actions, name, input_dims, conv1_channels=32,
+                    conv2_channels=64, chkpt_dir='Mario/DQL-Dueling/models'):
         super(DuelingLinearDeepQNetwork, self).__init__()
-        self.fc1 = nn.Linear(*input_dims, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.V = nn.Linear(128, 1)
-        self.A = nn.Linear(128, n_actions)
+
+        self.network = nn.Sequential(
+            nn.Conv2d(input_dims[0], conv1_channels, 5, stride=2),
+            nn.ReLU(inplace=False),
+            # nn.BatchNorm2d(conv1_channels),
+            nn.Conv2d(conv1_channels, conv2_channels, 5, stride=2),
+            nn.ReLU(inplace=False),
+            # nn.BatchNorm2d(conv2_channels),
+            nn.Flatten(),
+            nn.Linear(20736, 512),
+            nn.Linear(512, 256),
+        )
+        self.V = nn.Linear(256, 1)
+        self.A = nn.Linear(256, n_actions)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
         self.loss = nn.MSELoss()
@@ -59,12 +70,10 @@ class DuelingLinearDeepQNetwork(nn.Module):
         self.to(self.device)
 
         self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(
-            self.checkpoint_dir, name+'_dueling_dqn')
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_dueling_dqn')
 
     def forward(self, state):
-        l1 = F.relu(self.fc1(state))
-        l2 = F.relu(self.fc2(l1))
+        l2 = self.network(state)
         V = self.V(l2)
         A = self.A(l2)
 
@@ -82,7 +91,7 @@ class DuelingLinearDeepQNetwork(nn.Module):
 class Agent(object):
     def __init__(self, gamma, epsilon, alpha, n_actions, input_dims,
                  mem_size, batch_size, eps_min=0.01, eps_dec=5e-7,
-                 replace=1000, chkpt_dir='LunarLander/DQL-Dueling/models'):
+                 replace=1000, chkpt_dir='Mario/DQL-Dueling/models'):
         self.gamma = gamma
         self.epsilon = epsilon
         self.eps_min = eps_min
@@ -103,8 +112,7 @@ class Agent(object):
 
     def choose_action(self, observation):
         if np.random.random() > self.epsilon:
-            observation = observation[np.newaxis, :]
-            state = T.tensor(observation).to(self.q_eval.device)
+            state = T.tensor(observation.__array__(), dtype=T.float).unsqueeze(0).to(self.q_eval.device)
             _, advantage = self.q_eval.forward(state)
             action = T.argmax(advantage).item()
         else:
