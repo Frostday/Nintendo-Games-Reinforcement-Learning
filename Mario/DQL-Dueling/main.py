@@ -21,9 +21,9 @@ batchsize = 64
 n_games = 300
 testing_mode = False
 
-agent = Agent(gamma=0.99, epsilon=1.0, alpha=lr, input_dims=env.observation_space.shape, 
-                n_actions=env.action_space.n, mem_size=10000, eps_min=0.01, 
-                batch_size=batchsize, eps_dec=1e-3, replace=100)
+agent = Agent(gamma=0.97, epsilon=1.0, alpha=lr, input_dims=env.observation_space.shape, 
+                n_actions=env.action_space.n, mem_size=10000, eps_min=0.05, 
+                batch_size=batchsize, eps_dec=5e-4, replace=10)
 
 if testing_mode:
     agent.load_models()

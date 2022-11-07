@@ -16,11 +16,10 @@ from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
 from gym.wrappers import FrameStack
 
 # hyperparameters
-hidden_size = 256
-learning_rate = 3e-4
+learning_rate = 3e-6
 
 # Constants
-GAMMA = 0.99
+GAMMA = 0.98
 n_games = 300
 
 class ActorCritic(nn.Module):
