@@ -4,11 +4,16 @@ import os
 from nes_py.wrappers import JoypadSpace
 import gym_super_mario_bros
 from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
-
+# from gym.utils import play
+import pygame
 env = gym_super_mario_bros.make('SuperMarioBros-v0')
 env = JoypadSpace(env, [["right"], ["right", "A"]])
 
+pygame.init()
+pygame.key.set_repeat(10, 0)
+display = pygame.display.set_mode((300, 300))
 n_games = 10
+# play.play(env, zoom=3)
 
 filename = 'Mario/Human/human_scores.png'
 scores = []
@@ -19,9 +24,17 @@ for i in range(n_games):
     score = 0
     done = False
     observation = env.reset()
+    action = 0
     while not done:
         # choosing action (assign A=["right"], S=["right", "A"])
-        action =
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    action = 1
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_SPACE:
+                    action = 0
+
         observation_, reward, done, info = env.step(action)
         env.render()
         score += reward
@@ -33,3 +46,4 @@ for i in range(n_games):
 
 x = [i+1 for i in range(n_games)]
 plot_learning_curve(x, scores, filename)
+env.close()
