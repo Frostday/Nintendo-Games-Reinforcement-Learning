@@ -26,7 +26,7 @@ for i in range(n_games):
     observation = env.reset()
     action = 0
     while not done:
-        # choosing action (assign A=["right"], S=["right", "A"])
+        # choosing action (assign default=["right"], space bar=["right", "A"])
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
